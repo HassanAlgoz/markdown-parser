@@ -18,6 +18,7 @@ const bang = "!"
 const newline = "\n"
 const heading = "#"
 const threeBackTicks = "```"
+const backtick = "`"
 
 // Regexp
 const linkRegexp = /\[(.*)\]\((.+)\)/
@@ -31,7 +32,7 @@ const itemStartBold = 2
 const itemEndBold = 3
 const itemStartItalic = 4
 const itemEndItalic = 5
-const itemBang = 6
+const itemCode = 6
 const itemEOF = 7
 const itemNewline = 8
 const itemLinebreak = 9
@@ -95,6 +96,11 @@ class Lexer {
 
     // igonre
     ignore() {
+        this.start = this.pos
+    }
+
+    ignoreNext() {
+        this.pos++
         this.start = this.pos
     }
     
@@ -167,6 +173,10 @@ class Lexer {
             } else if (nextText.startsWith(threeBackTicks)) {
                 this.emit(itemText)
                 return this.lexCodeBlock
+
+            } else if (nextText.startsWith(backtick)) {
+                this.emit(itemText)
+                return this.lexCode
             }
             
             const r = this.next()
@@ -178,6 +188,19 @@ class Lexer {
                 }
             }
         }
+    }
+
+
+    lexCode() {
+        this.ignoreNext()
+        let idxNewline = this.input.indexOf(newline, this.pos)
+        let idxBacktick = this.input.indexOf(backtick, this.pos)
+        if (idxNewline > idxBacktick) {
+            this.pos += this.input.substring(this.pos, idxBacktick).length
+            this.emit(itemCode)
+            this.ignoreNext()
+        }
+        return this.lexText;
     }
 
     lexLink() {
@@ -199,7 +222,6 @@ class Lexer {
         }
         return this.lexText
     }
-
 
     lexStartBold() {
         this.pos += twoAstrisks.length;
@@ -434,6 +456,7 @@ lexer.items.forEach(item => {
         case itemLink: html += `<a href="${item.val.link}">`+ item.val.title +"</a>"; break
         case itemImg: html += `<img href="${item.val.link}" alt="${item.val.title}"/>`; break
         case itemCodeBlock: html += `<pre><code data-lang="${item.val.lang}">${item.val.code}</code></pre>`; break
+        case itemCode: html += `<code>${item.val}</code>`; break
         
         // Lists
         case itemOrderedListItem: {

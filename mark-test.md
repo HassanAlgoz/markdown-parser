@@ -6,6 +6,8 @@ Hello #2 is a good **bold** number not from *italia*.
 let x = 5;
 ```
 
+and this is a `code` highlight.
+
 ol item:
 1. one is alpha
 2. two was beta
