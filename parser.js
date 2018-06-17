@@ -13,11 +13,15 @@ const eof = 0
 // Tokens
 const oneAstrisk = "*"      // italic
 const twoAstrisks = "**"    // bold
-// const threeAstrisks = "***" // italic+bold
+const leftBracket = "["
 const bang = "!"
 const newline = "\n"
-const linebreak = "\n\n"
 const heading = "#"
+const threeBackTicks = "```"
+
+// Regexp
+const linkRegexp = /\[(.*)\]\((.+)\)/
+const imgRegexp  = /\!\[(.*)\]\((.+)\)/
 
 
 // Item Types
@@ -31,12 +35,14 @@ const itemBang = 6
 const itemEOF = 7
 const itemNewline = 8
 const itemLinebreak = 9
-const itemitem = 10
+const itemCodeBlock = 10
 const itemH1 = 11
 const itemH2 = 12
 const itemH3 = 13
 const itemOrderedListItem = 14
 const itemUnorderedListItem = 15
+const itemLink = 16
+const itemImg = 17
 
 class Item {
     constructor(typ, val) {
@@ -54,9 +60,9 @@ class Item {
 }
 
 class Lexer {
-    constructor(input) {
+    constructor(input, state=this.lexText) {
         this.input = input
-        this.state = this.lexText
+        this.state = state
         this.items = []
         this.start = 0
         this.pos = 0
@@ -69,10 +75,8 @@ class Lexer {
     }
 
     emit(typ) {
-        if (this.start !== this.pos) {
-            this.items.push(new Item(typ, this.input.substring(this.start, this.pos)))
-            this.start = this.pos
-        }
+        this.items.push(new Item(typ, this.input.substring(this.start, this.pos)))
+        this.start = this.pos
     }
 
     error(msg) {
@@ -136,21 +140,33 @@ class Lexer {
 
     lexText() {
         while(true) {
-            const incomingText = this.input.substring(this.pos)
-            if (incomingText.startsWith(twoAstrisks)) {
+            const nextText = this.input.substring(this.pos)
+            if (nextText.startsWith(twoAstrisks)) {
                 this.emit(itemText)
                 return this.lexStartBold
 
-            } else if (incomingText.startsWith(oneAstrisk)) {
+            } else if (nextText.startsWith(oneAstrisk)) {
                 this.emit(itemText)
                 return this.lexStartItalic
             
-            } else if (incomingText.startsWith(newline)) {
+            } else if (nextText.startsWith(newline)) {
                 this.emit(itemText)
                 return this.lexNewline
                 
-            } else if (this.pos == 0 && incomingText.startsWith(heading)) {
+            } else if (this.pos == 0 && nextText.startsWith(heading)) {
                 return this.lexHeading
+
+            } else if (nextText.startsWith(leftBracket)) {
+                this.emit(itemText)
+                return this.lexLink
+                
+            } else if (nextText.startsWith(bang)) {
+                this.emit(itemText)
+                return this.lexImg
+
+            } else if (nextText.startsWith(threeBackTicks)) {
+                this.emit(itemText)
+                return this.lexCodeBlock
             }
             
             const r = this.next()
@@ -164,6 +180,26 @@ class Lexer {
         }
     }
 
+    lexLink() {
+        let sub = this.input.substring(this.pos)
+        if (sub.search(linkRegexp) === 0) {
+            let [_, title, link] = sub.match(linkRegexp)
+            this.items.push(new Item(itemLink, {title, link}))
+            this.start = this.pos = this.input.indexOf(')', this.pos) + 1
+        }
+        return this.lexText
+    }
+
+    lexImg() {
+        let sub = this.input.substring(this.pos)
+        if (sub.search(imgRegexp) === 0) {
+            let [_, title, link] = sub.match(imgRegexp)
+            this.items.push(new Item(itemImg, {title, link}))
+            this.start = this.pos = this.input.indexOf(')', this.pos) + 1
+        }
+        return this.lexText
+    }
+
 
     lexStartBold() {
         this.pos += twoAstrisks.length;
@@ -173,8 +209,8 @@ class Lexer {
 
     lexInsideBold() {
         while(true) {
-            const incomingText = this.input.substring(this.pos)
-            if (incomingText.startsWith(oneAstrisk)) {
+            const nextText = this.input.substring(this.pos)
+            if (nextText.startsWith(oneAstrisk)) {
                 this.emit(itemText)
                 return this.lexEndBold
             }
@@ -209,8 +245,8 @@ class Lexer {
 
     lexInsideItalic() {
         while(true) {
-            const incomingText = this.input.substring(this.pos)
-            if (incomingText.startsWith(twoAstrisks)) {
+            const nextText = this.input.substring(this.pos)
+            if (nextText.startsWith(oneAstrisk)) {
                 this.emit(itemText)
                 return this.lexEndItalic
 
@@ -222,13 +258,11 @@ class Lexer {
                     this.pop()
                     this.emit(itemText)
                     return this.lexNewline;
-                    break
                 }
                 case eof: {
                     this.pop()
                     this.emit(itemText)
                     return this.lexEOF;
-                    break
                 }
             }
         }
@@ -241,31 +275,21 @@ class Lexer {
     }
 
     lexNewline() {
-        const r = this.next()
-        this.ignore()
-        switch(r) {
-            case heading: return this.lexHeading;
-            case newline: return this.lexLinebreak;
-            case eof: return this.lexEOF;
-            default: {
-                if (r.search(/\d/) !== -1) {
-                    return this.lexOrderedListItem;
-                } else if (r.search(/\-|\+|\*/) !== -1) {
-                    return this.lexUnorderedListItem;
-                }
-                return this.lexText;
-            }
-        }
+        return this.lexAfterNewline()
     }
 
     lexLinebreak() {
         this.acceptRun('\n')
         this.emit(itemLinebreak)
-        // Almost the same as in lexNewline
+        return this.lexAfterNewline()
+    }
+
+    lexAfterNewline() {
         const r = this.next()
         this.ignore()
         switch(r) {
             case heading: return this.lexHeading;
+            case newline: return this.lexLinebreak;
             case eof: return this.lexEOF;
             default: {
                 if (r.search(/\d/) !== -1) {
@@ -316,13 +340,28 @@ class Lexer {
         }
     }
 
+    lexCodeBlock() {
+        this.pos += threeBackTicks.length
+        this.ignore()
+        let idx = this.input.indexOf('\n', this.pos)
+        let lang = this.input.substring(this.pos, idx)
+        this.pos = idx + 1;
+        idx = this.input.indexOf('\n'+threeBackTicks, this.pos)
+        let code = this.input.substring(this.pos, idx)
+        
+        this.items.push(new Item(itemCodeBlock, {code, lang}))
+        this.start = this.pos = idx + 1 + threeBackTicks.length
+
+        return this.lexText
+    }
+
     lexHeading() {
-        let idx = this.input.indexOf('\n', this.pos);
-        let sub = this.input.substring(this.pos, idx);
+        let sub = this.input.substring(this.pos);
+        let idx = sub.indexOf('\n');
         if (idx >= 0) {
             let count = countConsecutive(sub, heading);
             this.start += count
-            this.pos += idx - 1;
+            this.pos += idx;
             switch(count) {
                 case 1: this.emit(itemH1); break
                 case 2: this.emit(itemH2); break
@@ -359,37 +398,28 @@ function countConsecutive(str, char) {
 }
 
 
-// let input = `
-
-// The quick **brown** fox jumped over the *lazy
-// * dog.`
-// let input = `السلام عليكم **ورحمة الله** وبركاته`
-// let input = `
-// # head1
-// ## head2
-// ### head3
-// Hello #3 is good.
-// `
-let input = `
-# Head1
-parggoywa you **bold**
-
-1. one
-2. two
-3. three
-4.four
-yay
-- ich
-* nee
-+ san
-
-`
+// Parse
+const fs = require('fs')
+let input = fs.readFileSync('./mark-test.md', {encoding: 'utf8'})
+input = input.replace(/\r\n/gm, '\n')
 const lexer = new Lexer(input)
 lexer.run()
 console.log(lexer.items)
 
+let inOL = false;
+let inUL = false;
 let html = "";
 lexer.items.forEach(item => {
+    
+    if (inOL === true && item.typ !== itemOrderedListItem) {
+        inOL = false
+        html += "</ol>"
+    }
+    if (inUL === true && item.typ !== itemUnorderedListItem) {
+        inUL = false
+        html += "</ul>"
+    }
+
     switch (item.typ) {
         case itemText: html += item.val; break
         case itemStartBold: html += "<b>"; break
@@ -401,9 +431,29 @@ lexer.items.forEach(item => {
         case itemH1: html += "<h1>"+ item.val +"</h1>\n"; break
         case itemH2: html += "<h2>"+ item.val +"</h2>\n"; break
         case itemH3: html += "<h3>"+ item.val +"</h3>\n"; break
-        case itemOrderedListItem: html += "<li>"+ item.val +"</li>\n"; break
-        case itemUnorderedListItem: html += "<li>"+ item.val +"</li>\n"; break
-    }
+        case itemLink: html += `<a href="${item.val.link}">`+ item.val.title +"</a>"; break
+        case itemImg: html += `<img href="${item.val.link}" alt="${item.val.title}"/>`; break
+        case itemCodeBlock: html += `<pre><code data-lang="${item.val.lang}">${item.val.code}</code></pre>`; break
+        
+        // Lists
+        case itemOrderedListItem: {
+            if (inOL === false) {
+                inOL = true;
+                html += "<ol>"
+            }
+            html += "<li>"+ item.val +"</li>\n"
+            break
+        }
+        case itemUnorderedListItem: {
+            if (inUL === false) {
+                inUL = true;
+                html += "<ul>"
+            }
+            html += "<li>"+ item.val +"</li>\n"
+            break
+        }
+    }    
 })
+console.log('--------------------------------------------------------------------------------------------')
 console.log("input:", input)
-console.log("output:", html)
+fs.writeFileSync('./output.html', html)

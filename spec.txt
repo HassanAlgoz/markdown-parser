@@ -5,27 +5,21 @@
 ##### عنوان
 ###### عنوان
 
-صوت![وصف](https//instagram.com/watch?v=acbcd143xcf)
-صورة![وصف](https//youtube.com/watch?v=acbcd143xcf)
-فيديو![وصف](https//twitter.com/watch?v=acbcd143xcf)
+[رابط](https//instagram.com/watch?v=acbcd143xcf)
 
+![وصف صورة](https//youtube.com/watch?v=acbcd143xcf)
 
 *مائل*
 **عريض**
 
-قائمة مرتبة مرقمة: <ol>
+قائمة مرتبة مرقمة:
 1. واحد
 2. اثنان
 3. ثلاثة
 4. أربعة
 
-نقاط: <ul>
+نقاط: 
 - برتقال
-- جزر
-- خس
-
-نقاط: <ul>
-* برتقال
-* جزر
++ جزر
 * خس
-
+* خس
