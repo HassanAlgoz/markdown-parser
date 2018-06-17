@@ -36,6 +36,7 @@ const itemH1 = 11
 const itemH2 = 12
 const itemH3 = 13
 const itemOrderedListItem = 14
+const itemUnorderedListItem = 15
 
 class Item {
     constructor(typ, val) {
@@ -163,32 +164,6 @@ class Lexer {
         }
     }
 
-    lexOrderedListItem() {
-        // start from after the space
-        // this.start = this.input.indexOf(' ', this.pos) + 1
-        this.acceptRun("1234567890.)- ")
-        while(true) {
-            const r = this.next()
-            switch(r) {
-                // case '.':
-                // case ' ':
-                // case '-': {
-                //     this.pos++
-                //     this.ignore()
-                //     r = this.next()
-                // }
-                case '\n': {
-                    this.emit(itemOrderedListItem)
-                    return this.lexNewline
-                }
-
-                case eof: {
-                    this.emit(itemOrderedListItem)
-                    return this.lexEOF;
-                }
-            }
-        }
-    }
 
     lexStartBold() {
         this.pos += twoAstrisks.length;
@@ -275,9 +250,10 @@ class Lexer {
             default: {
                 if (r.search(/\d/) !== -1) {
                     return this.lexOrderedListItem;
-                } else {
-                    return this.lexText;
+                } else if (r.search(/\-|\+|\*/) !== -1) {
+                    return this.lexUnorderedListItem;
                 }
+                return this.lexText;
             }
         }
     }
@@ -294,8 +270,47 @@ class Lexer {
             default: {
                 if (r.search(/\d/) !== -1) {
                     return this.lexOrderedListItem;
-                } else {
-                    return this.lexText;
+                } else if (r.search(/\-|\+|\*/) !== -1) {
+                    return this.lexUnorderedListItem;
+                }
+                return this.lexText;
+            }
+        }
+    }
+
+    lexOrderedListItem() {
+        this.acceptRun("1234567890.)- ")
+        this.ignore()
+        while(true) {
+            const r = this.next()
+            switch(r) {
+                case '\n': {
+                    this.emit(itemOrderedListItem)
+                    return this.lexNewline
+                }
+
+                case eof: {
+                    this.emit(itemOrderedListItem)
+                    return this.lexEOF;
+                }
+            }
+        }
+    }
+
+    lexUnorderedListItem() {
+        let r = this.next()
+        this.ignore()
+        while(true) {
+            r = this.next()
+            switch(r) {
+                case newline: {
+                    this.emit(itemUnorderedListItem)
+                    return this.lexNewline
+                }
+
+                case eof: {
+                    this.emit(itemUnorderedListItem)
+                    return this.lexEOF;
                 }
             }
         }
@@ -364,6 +379,10 @@ parggoywa you **bold**
 3. three
 4.four
 yay
+- ich
+* nee
++ san
+
 `
 const lexer = new Lexer(input)
 lexer.run()
@@ -383,6 +402,7 @@ lexer.items.forEach(item => {
         case itemH2: html += "<h2>"+ item.val +"</h2>\n"; break
         case itemH3: html += "<h3>"+ item.val +"</h3>\n"; break
         case itemOrderedListItem: html += "<li>"+ item.val +"</li>\n"; break
+        case itemUnorderedListItem: html += "<li>"+ item.val +"</li>\n"; break
     }
 })
 console.log("input:", input)
