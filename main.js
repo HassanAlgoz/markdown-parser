@@ -1,12 +1,14 @@
-## heading2
+import { ParseText } from './markdown/parser.js'
+
+const html = ParseText(`## heading2
 # heading1
 Hello #2 is a good **bold** number not from *italia*.
 
-```javascript
+\`\`\`javascript
 let x = 5;
-```
+\`\`\`
 
-and this is a `code` highlight.
+and this is a \`code\` highlight.
 
 ol item:
 1. one is alpha
@@ -26,4 +28,6 @@ Aother line as well
 Now a mix of ol and links:
 1. one [here](https://link.com)
 2. twoo [here](https://link.com)
-3. threee [here](https://link.com)
+3. threee [here](https://link.com)`)
+
+document.body.innerHTML = html
